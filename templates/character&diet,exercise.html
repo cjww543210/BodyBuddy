@@ -1,50 +1,176 @@
-<!-- templates/result.html -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+  <link rel="stylesheet" href="{{ url_for('static', filename='home.css') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Alumni+Sans+Pinstripe:ital@0;1&family=Gugi&family=Momo+Trust+Display&family=Orbitron:wght@400..900&family=Roboto:ital,wght@0,100..900;1,100..900&family=Silkscreen:wght@400;700&family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,500;1,700&family=Urbanist:ital,wght@0,100..900;1,100..900&family=VT323&display=swap" rel="stylesheet">
   <meta charset="UTF-8">
   <title>결과 페이지</title>
-  <style>
-    body { font-family: sans-serif; margin: 40px; display: flex; gap: 20px; }
-    .left, .right { flex: 1; }
-    .card { border: 1px solid #ddd; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-    button { padding: 6px 12px; margin: 4px; }
-    .image-box { width:100%; height:200px; border:1px dashed #aaa; margin-bottom:20px; display:flex; align-items:center; justify-content:center; color:#aaa; }
-  </style>
 </head>
 <body>
-  <div class="left">
-    <div class="image-box">이미지 영역 (비워둠)</div>
-    <div class="card">
-      <h2>{{ user_info.name }}님의 결과</h2>
-      <p>BMI: {{ bmi }}</p>
-      <p>BMR: {{ bmr }}</p>
-      <p>현재 체중: {{ weight }} kg</p>
-      <form method="POST" action="{{ url_for('update_weight') }}">
-        <input type="hidden" name="weight" value="{{ weight }}">
-        <button type="submit" name="action" value="minus">-1kg</button>
-        <button type="submit" name="action" value="plus">+1kg</button>
-      </form>
-    </div>
+  <div class="top-bar">
+    <a href="{{ url_for('userInfo', user_id=user_id) }}">
+      <img id="info" src="{{ url_for('static', filename='images/edit.png') }}" alt="정보수정" width="80px">
+    </a>
+
+    <a href="{{ url_for('recommend', user_id=user_id) }}">
+      <img id="recommend" src="{{ url_for('static', filename='images/recommend.png') }}" alt="추천" width="80px">
+    </a>
+
+    <a href="{{ url_for('weight_graph', user_id=user_id) }}">
+      <img src="{{ url_for('static', filename='images/graph.png') }}" alt="그래프" width="80px">
+    </a>
+    <button class="back-btn" onclick="history.back()">뒤로가기</button>
+
   </div>
 
-  <div class="right">
-    <div class="card">
-      <h3>오늘의 추천 식단</h3>
-      <ul>
-        {% for meal, menu in meals.items() %}
-          <li>{{ meal }}: {{ menu }}</li>
-        {% endfor %}
-      </ul>
-    </div>
-    <div class="card">
-      <h3>추천 운동</h3>
-      <p>{{ exercise }}</p>
-    </div>
-    <div class="card">
-      <h3>AI 코멘트</h3>
-      <p>{{ comment }}</p>
-    </div>
+  <!-- 우측 상단 D-Day표시 -->
+  <div class="top-right-bar">  
+    <div id="d-day-top">{{ d_day_text }}</div>
+    <button onclick="confirmLogout()">로그아웃</button>
   </div>
+
+
+   <!-- 우측: 캐릭터 -->
+  <div class="container">
+    <div class="egg">
+
+      <!-- 정보 표시 버튼 -->
+      <button id="info-table-btn" class="info-btn"></button>
+
+      <!-- 로고 -->
+      <p id="logo">BodyBuddy</p>
+
+      <!--캐릭터-->
+      <div id="character-image">
+        <img id="character-img" src="{{ character_img }}" alt="내 캐릭터" width="300px" height="300px">
+      </div>
+
+      <!-- 사용자 정보 표 -->
+      <div id="user-info-table" style="display: none;">
+        <h3>{{ user_info.name }}님의 정보</h3>
+        <table class="user-info-table">
+          <tr><th>성별</th><td>{{ user_info.gender }}</td></tr>
+          <tr><th>나이</th><td>{{ user_info.age }} 세</td></tr>
+          <tr><th>신장</th><td>{{ user_info.height }} cm</td></tr>
+          <tr><th>체중</th><td id="weight">{{ user_info.weight }} kg</td></tr>
+          <tr><th>체지방률</th><td>{{ user_info.body_fat }} %</td></tr>
+          <tr><th>BMI</th><td>{{ bmi }}</td></tr>
+          <tr><th>BMR</th><td>{{ bmr }}</td></tr>
+        </table>
+      </div>
+
+
+    <!-- 체중 증감 버튼: AJAX 버튼으로 변경 -->
+    <div class="weight-control">
+      <button type="button" onclick="updateWeight('minus')">-</button>
+      <span id="weight-display" onclick="enableEdit()">{{ weight }} kg</span>
+      <button type="button" onclick="updateWeight('plus')">+</button>
+    </div>
+
+    
+  </div>
+
+
+  <!-- 하단: 뒤로가기 + 오늘의 추천 버튼 -->
+  <div class="bottom-bar">
+    <!-- 자동 멘트 -->
+    <div id="comment" class="comment">{{ comment }}</div>  <!-- id 추가 -->
+    <!-- D-Day 알람 메시지 -->
+    {% if alarm_message %}
+    <div class="alarm">{{ alarm_message }}</div>
+    {% endif %}
+  </div>
+
+  <!-- JS: AJAX 요청 -->
+  <script>
+    function updateWeight(action) {
+      const currentWeight = document.getElementById("weight-display").innerText.split(" ")[0];
+      fetch("/update_weight", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `user_id={{ user_id }}&weight=${currentWeight}&action=${action}`
+      })
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById("weight-display").innerText = data.weight + " kg";
+        document.getElementById("weight").innerText = data.weight;
+        document.getElementById("comment").innerText = data.comment;
+        document.getElementById("character-img").src = data.character_img + "?t=" + new Date().getTime();  // 캐시 무력화
+      });
+    }
+
+    function enableEdit() {
+      const span = document.getElementById("weight-display");
+      const currentValue = span.innerText.replace(" kg", "");
+      const input = document.createElement("input");
+      input.type = "number";
+      input.step = "0.1";
+      input.value = currentValue;
+      input.id = "weight-input";
+
+      // 기존 스타일 유지
+      input.style.width = "100px";          // 조금 넉넉하게
+      input.style.fontSize = "28px";        // 기존 글씨 크기
+      input.style.fontWeight = "bold";      // 기존 굵기
+      input.style.textAlign = "center";     // 가운데 정렬
+
+      span.replaceWith(input);
+      input.focus();
+
+      input.addEventListener("blur", () => saveWeight(input.value));
+      input.addEventListener("keydown", (e) => {
+      
+        if (e.key === "Enter") {
+        saveWeight(input.value);
+        }
+      });
+    }
+      
+  function saveWeight(newWeight) {
+    fetch("/update_weight", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `user_id={{ user_id }}&weight=${newWeight}&action=set`
+    })
+    .then(response => response.json())
+    .then(data => {
+      const input = document.getElementById("weight-input");
+      const span = document.createElement("span");
+      span.id = "weight-display";
+      span.innerText = data.weight + " kg";
+      span.onclick = enableEdit;
+      input.replaceWith(span);
+
+      updateDisplay(data.weight, data.comment, data.character_img);
+    });
+  }
+
+  function updateDisplay(weight, comment, character_img) {
+    document.getElementById("weight").innerText = weight;
+    document.getElementById("comment").innerText = comment;
+    document.getElementById("character-img").src = character_img + "?t=" + new Date().getTime();  // 캐시 무력화
+  }
+
+  document.getElementById("info-table-btn").addEventListener("click", function() {
+    const img = document.getElementById("character-image");
+    const info = document.getElementById("user-info-table");
+
+    if (info.style.display === "none") {
+      info.style.display = "block";
+      img.style.display = "none";
+    } else {
+      info.style.display = "none";
+      img.style.display = "block";
+    }
+  });
+
+  function confirmLogout() {
+    if (confirm('정말 로그아웃 하시겠습니까?')) {
+      window.location.href = "{{ url_for('logout') }}";
+    }
+  }
+  </script>
 </body>
 </html>

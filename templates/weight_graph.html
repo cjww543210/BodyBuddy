@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alumni+Sans+Pinstripe:ital@0;1&family=Dongle&family=Gugi&family=Moirai+One&family=Momo+Trust+Display&family=Orbitron:wght@400..900&family=Roboto:ital,wght@0,100..900;1,100..900&family=Silkscreen:wght@400;700&family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,500;1,700&family=Urbanist:ital,wght@0,100..900;1,100..900&family=VT323&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='graph.css') }}">
+    <title>체중 변화 그래프 - BodyBuddy</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title-with-images">
+            <img src="{{ url_for('static', filename='images/ganadi_Pic.png') }}" class="title-img left-img">
+            <p>! 몸무게가 이렇게 변했어요 !</p>
+            <img src="{{ url_for('static', filename='images/gonyani_Pic.png') }}" class="title-img right-img">
+        </h1>
+
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <h3>시작 체중</h3>
+                <p id="start-weight">-</p>
+            </div>
+            <div class="stat-card">
+                <h3>현재 체중</h3>
+                <p id="current-weight">-</p>
+            </div>
+            <div class="stat-card">
+                <h3>목표 체중</h3>
+                <p id="target-weight">-</p>
+            </div>
+            <div class="stat-card">
+                <h3>변화 체중</h3>
+                <p id="weight-change">-</p>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="weightChart"></canvas>
+        </div>
+
+        <div class="button-container">
+            <button onclick="history.back()" class="back-button">← 돌아가기</button>
+        </div>
+    </div>
+
+    <script>
+        const userId = "{{ user_id }}";
+
+        async function loadWeightData() {
+            try {
+                const response = await fetch(`/api/weight_data/${userId}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    alert('데이터를 불러올 수 없습니다.');
+                    return;
+                }
+
+                const history = data.history;
+                const targetWeight = data.target_weight;
+
+                if (history.length === 0) {
+                    document.querySelector('.chart-container').innerHTML =
+                        '<p style="text-align:center; color:#999; padding:50px;">아직 체중 기록이 없습니다.</p>';
+                    return;
+                }
+
+                // 통계 계산
+                const startWeight = history[0].weight;
+                const currentWeight = history[history.length - 1].weight;
+                const weightChange = (currentWeight - startWeight).toFixed(1);
+
+                document.getElementById('start-weight').textContent = `${startWeight}kg`;
+                document.getElementById('current-weight').textContent = `${currentWeight}kg`;
+                document.getElementById('target-weight').textContent = targetWeight ? `${targetWeight}kg` : '-';
+                document.getElementById('weight-change').textContent =
+                    `${weightChange > 0 ? '+' : ''}${weightChange}kg`;
+
+                // 그래프 그리기
+                const dates = history.map(record => {
+                    const date = new Date(record.date);
+                    return `${date.getMonth() + 1}/${date.getDate()}`;
+                });
+                const weights = history.map(record => record.weight);
+
+                const ctx = document.getElementById('weightChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: dates,
+                        datasets: [{
+                            label: '체중 (kg)',
+                            data: weights,
+                            borderColor: '#E6C300',
+                            backgroundColor: 'rgba(255, 238, 155, 0.3)',
+                            tension: 0.4,
+                            fill: true,
+                            pointRadius: 5,
+                            pointHoverRadius: 7,
+                            pointBackgroundColor: '#E6C300',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2
+                        },
+                        ...(targetWeight ? [{
+                            label: '목표 체중',
+                            data: Array(dates.length).fill(targetWeight),
+                            borderColor: '#FFD966',
+                            borderDash: [5, 5],
+                            borderWidth: 2,
+                            fill: false,
+                            pointRadius: 0
+                        }] : [])
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.dataset.label + ': ' + context.parsed.y + 'kg';
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                ticks: {
+                                    callback: function(value) {
+                                        return value + 'kg';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert('데이터를 불러오는 중 오류가 발생했습니다.');
+            }
+        }
+
+        loadWeightData();
+    </script>
+</body>
+</html>
